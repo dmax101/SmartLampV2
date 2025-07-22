@@ -43,6 +43,4 @@ extern const unsigned long displayUpdateInterval;
 #define ST77XX_BROWN    0x9A60  // RGB565: Brown
 #endif
 
-// Não redefinir ST77XX_ORANGE pois já existe na biblioteca
-
 #endif

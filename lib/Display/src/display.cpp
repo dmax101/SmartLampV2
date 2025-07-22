@@ -1,5 +1,5 @@
 #include "display.h"
-#include "config.h"
+#include <config.h>
 #include <time.h>
 
 // Inicializa o display
@@ -34,8 +34,8 @@ void clearDisplayArea(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t col
 }
 
 void clearStatusMessages() {
-    // Limpa áreas onde mensagens de status podem aparecer
-    clearDisplayArea(0, 0, 240, 135, ST77XX_BLACK);
+    // Limpa toda a tela
+    lcd.fillScreen(ST77XX_BLACK);
 }
 
 void desenharIconeUmidade(int16_t x, int16_t y) {
@@ -67,51 +67,6 @@ void desenharIconeClima(int16_t x, int16_t y, String icone) {
         lcd.fillCircle(x + 22, y + 18, 6, ST77XX_WHITE);
         lcd.fillRect(x + 8, y + 18, 14, 8, ST77XX_WHITE);
     }
-    else if (icone == "04d" || icone == "04n") { // Nuvens escuras
-        uint16_t grayColor = 0x39C7; // Cinza escuro
-        lcd.fillCircle(x + 8, y + 18, 6, grayColor);
-        lcd.fillCircle(x + 15, y + 15, 8, grayColor);
-        lcd.fillCircle(x + 22, y + 18, 6, grayColor);
-        lcd.fillRect(x + 8, y + 18, 14, 8, grayColor);
-    }
-    else if (icone.startsWith("09") || icone.startsWith("10")) { // Chuva
-        // Nuvem
-        lcd.fillCircle(x + 8, y + 15, 5, ST77XX_BLUE);
-        lcd.fillCircle(x + 15, y + 12, 7, ST77XX_BLUE);
-        lcd.fillCircle(x + 22, y + 15, 5, ST77XX_BLUE);
-        lcd.fillRect(x + 8, y + 15, 14, 6, ST77XX_BLUE);
-        // Gotas de chuva
-        for (int i = 0; i < 5; i++) {
-            lcd.drawLine(x + 10 + i * 3, y + 22, x + 8 + i * 3, y + 28, ST77XX_CYAN);
-        }
-    }
-    else if (icone.startsWith("11")) { // Tempestade
-        // Nuvem escura
-        lcd.fillCircle(x + 8, y + 15, 5, ST77XX_PURPLE);
-        lcd.fillCircle(x + 15, y + 12, 7, ST77XX_PURPLE);
-        lcd.fillCircle(x + 22, y + 15, 5, ST77XX_PURPLE);
-        lcd.fillRect(x + 8, y + 15, 14, 6, ST77XX_PURPLE);
-        // Raio
-        lcd.drawLine(x + 15, y + 20, x + 12, y + 25, ST77XX_YELLOW);
-        lcd.drawLine(x + 12, y + 25, x + 18, y + 30, ST77XX_YELLOW);
-    }
-    else if (icone.startsWith("13")) { // Neve
-        // Nuvem
-        lcd.fillCircle(x + 8, y + 15, 5, ST77XX_WHITE);
-        lcd.fillCircle(x + 15, y + 12, 7, ST77XX_WHITE);
-        lcd.fillCircle(x + 22, y + 15, 5, ST77XX_WHITE);
-        lcd.fillRect(x + 8, y + 15, 14, 6, ST77XX_WHITE);
-        // Flocos de neve
-        for (int i = 0; i < 4; i++) {
-            int px = x + 10 + i * 4;
-            int py = y + 25 + (i % 2) * 3;
-            lcd.drawPixel(px, py, ST77XX_WHITE);
-            lcd.drawPixel(px - 1, py, ST77XX_WHITE);
-            lcd.drawPixel(px + 1, py, ST77XX_WHITE);
-            lcd.drawPixel(px, py - 1, ST77XX_WHITE);
-            lcd.drawPixel(px, py + 1, ST77XX_WHITE);
-        }
-    }
     else { // Padrão - nuvem
         lcd.fillCircle(x + 8, y + 18, 6, ST77XX_WHITE);
         lcd.fillCircle(x + 15, y + 15, 8, ST77XX_WHITE);
@@ -127,7 +82,7 @@ void drawInterfaceElements(const WeatherData& weather) {
         return;
     }
     
-    // Prepara strings para exibição (sem segundos)
+    // Prepara strings para exibição
     char timeStr[8];
     char dateStr[12];
     char tempStr[20];
@@ -140,7 +95,7 @@ void drawInterfaceElements(const WeatherData& weather) {
     
     // Área da hora com fundo semi-transparente
     int xTime = calcularPosicaoX(timeStr, 3);
-    lcd.fillRect(xTime - 5, 0, 240 - xTime + 5, 30, 0x0000); // Fundo preto translúcido
+    lcd.fillRect(xTime - 5, 0, 240 - xTime + 5, 30, 0x0000);
     lcd.setTextColor(ST77XX_CYAN);
     lcd.setTextSize(3);
     lcd.setCursor(xTime, 5);
@@ -195,15 +150,15 @@ void clearArea(int16_t x, int16_t y, uint16_t w, uint16_t h) {
 }
 
 void showErrorMessage(const char* message) {
-    clearStatusMessages();
     lcd.setTextColor(ST77XX_RED);
-    int16_t x = calcularPosicaoX(message, 1);
-    lcd.setCursor(x, 50);
+    lcd.setTextSize(1);
+    lcd.setCursor(10, 60);
     lcd.println(message);
 }
 
 void showStatusMessage(const char* message, uint16_t color) {
     lcd.setTextColor(color);
     lcd.setTextSize(1);
+    lcd.setCursor(10, 60);
     lcd.println(message);
 }

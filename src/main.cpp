@@ -14,61 +14,66 @@ bool systemInitialized = false;
 
 void setup() {
     Serial.begin(115200);
-    delay(1000);
+    delay(2000); // Aguarda serial monitor
     
-    // Inicializa SPIFFS
-    if (!SPIFFS.begin()) {
-        Serial.println("Erro ao inicializar SPIFFS");
+    Serial.println("=== SMART LAMP INICIANDO ===");
+    
+    // Inicializa SPIFFS primeiro
+    Serial.println("Inicializando SPIFFS...");
+    if (!SPIFFS.begin(true)) { // true = format if failed
+        Serial.println("ERRO: Falha ao inicializar SPIFFS");
+    } else {
+        Serial.println("SPIFFS inicializado com sucesso");
+        
+        // Lista arquivos
+        File root = SPIFFS.open("/");
+        File file = root.openNextFile();
+        Serial.println("Arquivos no SPIFFS:");
+        while (file) {
+            Serial.printf("  %s (%d bytes)\n", file.name(), file.size());
+            file = root.openNextFile();
+        }
     }
     
     // Inicializa display
+    Serial.println("Inicializando display...");
     initDisplay();
     
-    // Inicializa sistema de wallpaper
+    // Mostra mensagem inicial
+    showStatusMessage("Smart Lamp v2.0", ST77XX_WHITE);
+    delay(2000);
+    
+    // Inicializa e testa wallpaper
+    Serial.println("Inicializando wallpaper...");
     WallpaperManager::initializeWallpaper();
+    
+    // Testa o wallpaper imediatamente
+    Serial.println("Testando carregamento de wallpaper...");
+    clearStatusMessages();
+    WallpaperManager::displayWallpaperWithOverlay();
+    
+    // Aguarda para ver o resultado
+    delay(5000);
     
     // Conecta ao WiFi
     if (WiFiManager::connectToWiFi()) {
-        // Limpa mensagens de status após conexão
-        delay(1000);
         clearStatusMessages();
-        
-        // Configura NTP
         TimeManager::initNTP();
         
-        // Obtém dados iniciais do clima
+        // Obtém dados do clima
         Serial.println("Obtendo dados do clima...");
-        showStatusMessage("Carregando clima...", ST77XX_YELLOW);
-        
-        bool climaOK = false;
-        for (int i = 0; i < 3 && !climaOK; i++) {
-            Serial.printf("Tentativa %d de obter dados do clima...\n", i + 1);
-            climaOK = weatherManager.updateWeatherData();
-            if (!climaOK) {
-                delay(2000);
-            }
-        }
-        
-        if (climaOK) {
-            showStatusMessage("Clima OK!", ST77XX_GREEN);
-            delay(1000);
-        } else {
-            showStatusMessage("Erro no clima!", ST77XX_RED);
-            delay(1000);
+        bool climaOK = weatherManager.updateWeatherData();
+        if (!climaOK) {
             weatherManager.setDefaultValues();
         }
         
-        // Limpa todas as mensagens de status
-        clearStatusMessages();
-        delay(500);
-        
-        // Carrega papel de parede
-        Serial.println("Carregando papel de parede...");
+        // Recarrega wallpaper após configurações
+        Serial.println("Recarregando wallpaper...");
         WallpaperManager::displayWallpaperWithOverlay();
         
         systemInitialized = true;
     } else {
-        // Erro de conexão - mantém mensagem na tela
+        showErrorMessage("Erro WiFi!");
         delay(5000);
     }
     
@@ -76,7 +81,7 @@ void setup() {
 }
 
 void loop() {
-    // Se o sistema não foi inicializado, tenta reconectar
+    // Se não inicializado, tenta novamente
     if (!systemInitialized) {
         if (WiFiManager::connectToWiFi()) {
             clearStatusMessages();
@@ -85,7 +90,7 @@ void loop() {
             systemInitialized = true;
             forceFullUpdate = true;
         } else {
-            delay(5000); // Aguarda 5 segundos antes de tentar novamente
+            delay(5000);
             return;
         }
     }
@@ -97,13 +102,13 @@ void loop() {
     }
     lastDisplayUpdate = millis();
     
-    // Verifica conexão WiFi
+    // Verifica WiFi
     if (!WiFiManager::isConnected()) {
         if (forceFullUpdate) {
             clearStatusMessages();
             WiFiManager::showConnectionStatus();
             forceFullUpdate = false;
-            systemInitialized = false; // Força reinicialização
+            systemInitialized = false;
         }
         delay(1000);
         return;
@@ -115,7 +120,7 @@ void loop() {
         forceFullUpdate = true;
     }
     
-    // Atualiza dados do clima
+    // Atualiza clima se necessário
     if (weatherManager.needsUpdate()) {
         Serial.println("Atualizando dados do clima...");
         if (weatherManager.updateWeatherData()) {
@@ -123,10 +128,11 @@ void loop() {
         }
     }
     
-    // Redesenha interface se necessário
+    // Redesenha interface
     if (forceFullUpdate || minuteChanged) {
-        // Se o wallpaper não estiver carregado, carrega novamente
+        // Verifica se wallpaper precisa ser recarregado
         if (!WallpaperManager::isWallpaperLoaded()) {
+            Serial.println("Wallpaper não carregado, recarregando...");
             WallpaperManager::displayWallpaperWithOverlay();
         }
         

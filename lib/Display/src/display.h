@@ -3,7 +3,7 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
-#include "config.h"
+#include <config.h>
 
 // Declaração do objeto display
 extern Adafruit_ST7789 lcd;

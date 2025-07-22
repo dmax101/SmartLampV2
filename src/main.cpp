@@ -46,7 +46,8 @@ String lastTempStr = "";
 String lastUmidadeStr = "";
 bool forceFullUpdate = true;
 unsigned long lastDisplayUpdate = 0;
-const unsigned long displayUpdateInterval = 100;
+const unsigned long displayUpdateInterval = 1000; // Atualiza a cada segundo para verificar mudança de minuto
+int lastMinute = -1; // Para detectar mudança de minuto
 
 // Inicializa o display
 Adafruit_ST7789 lcd = Adafruit_ST7789(LCD_CS, LCD_DC, LCD_RST);
@@ -417,13 +418,13 @@ void drawInterfaceElements() {
     return;
   }
   
-  // Prepara strings para exibição
-  char timeStr[10];
+  // Prepara strings para exibição (sem segundos)
+  char timeStr[8];  // Reduzido para HH:MM
   char dateStr[12];
   char tempStr[20];
   char umidadeStr[15];
   
-  sprintf(timeStr, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min); // Removido segundos
   sprintf(dateStr, "%02d/%02d/%04d", timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
   sprintf(tempStr, "%.1f°C", temperatura);
   sprintf(umidadeStr, "%.0f%%", umidade);
@@ -592,6 +593,9 @@ void setup() {
   forceFullUpdate = true;
 }
 
+unsigned long frameCount = 0;
+unsigned long lastFPSCheck = 0;
+
 void loop() {
   // Controla a frequência de atualização do display
   if (millis() - lastDisplayUpdate < displayUpdateInterval) {
@@ -603,7 +607,7 @@ void loop() {
   // Verifica se o WiFi ainda está conectado
   if (WiFi.status() != WL_CONNECTED) {
     if (forceFullUpdate) {
-      lcd.fillScreen(ST77XX_BLACK);
+      lcd.fillScreen(ST77XX_BLACK); // Limpa a tela
       lcd.setTextColor(ST77XX_RED);
       
       char errorMsg[] = "WiFi desconectado!";
@@ -620,7 +624,7 @@ void loop() {
   if (!getLocalTime(&timeinfo)) {
     Serial.println("Falha ao obter o tempo");
     if (forceFullUpdate) {
-      lcd.fillScreen(ST77XX_BLACK);
+      lcd.fillScreen(ST77XX_BLACK); // Limpa a tela
       lcd.setTextColor(ST77XX_RED);
       
       char timeError[] = "Erro no tempo!";
@@ -633,6 +637,24 @@ void loop() {
     return;
   }
   
+  // Limpa a tela após verificações de conexão bem-sucedidas (uma vez)
+  static bool screenCleared = false;
+  if (!screenCleared && WiFi.status() == WL_CONNECTED) {
+    // Carrega papel de parede novamente após conexão
+    Serial.println("Reconectado - carregando papel de parede...");
+    displayWallpaperWithOverlay();
+    screenCleared = true;
+    forceFullUpdate = true;
+  }
+  
+  // Detecta mudança de minuto para atualizar apenas quando necessário
+  bool minuteChanged = (timeinfo.tm_min != lastMinute);
+  if (minuteChanged) {
+    lastMinute = timeinfo.tm_min;
+    forceFullUpdate = true;
+    Serial.printf("Minuto mudou para: %02d:%02d\n", timeinfo.tm_hour, timeinfo.tm_min);
+  }
+  
   // Atualiza dados do clima a cada 10 minutos
   if (millis() - ultimaAtualizacao > intervaloAtualizacao) {
     Serial.println("Atualizando dados do clima...");
@@ -642,17 +664,22 @@ void loop() {
     }
   }
   
-  // Redesenha apenas os elementos da interface
-  drawInterfaceElements();
+  // Só redesenha a interface se o minuto mudou ou foi forçada atualização
+  if (forceFullUpdate || minuteChanged) {
+    drawInterfaceElements();
+    forceFullUpdate = false;
+    
+    // Debug quando atualiza
+    Serial.printf("Display atualizado - Hora: %02d:%02d | Temp: %.1f°C | Umidade: %.0f%%\n", 
+                  timeinfo.tm_hour, timeinfo.tm_min, temperatura, umidade);
+  }
   
-  // Debug no Serial (menos frequente)
+  // Debug menos frequente para não sobrecarregar
   static unsigned long lastDebug = 0;
-  if (millis() - lastDebug > 5000) {
-    Serial.printf("Hora: %02d:%02d:%02d | Temp: %.1f°C | Umidade: %.0f%% | %s\n", 
-                  timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+  if (millis() - lastDebug > 30000) { // Debug a cada 30 segundos
+    Serial.printf("Status - Hora: %02d:%02d | Temp: %.1f°C | Umidade: %.0f%% | %s\n", 
+                  timeinfo.tm_hour, timeinfo.tm_min,
                   temperatura, umidade, descricaoClima.c_str());
     lastDebug = millis();
   }
-  
-  delay(50);
 }

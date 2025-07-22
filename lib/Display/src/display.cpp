@@ -93,50 +93,41 @@ void drawInterfaceElements(const WeatherData& weather) {
     sprintf(tempStr, "%.1f°C", weather.temperatura);
     sprintf(umidadeStr, "%.0f%%", weather.umidade);
     
-    // Área da hora com fundo semi-transparente
+    // Hora (SEM fundo preto)
     int xTime = calcularPosicaoX(timeStr, 3);
-    lcd.fillRect(xTime - 5, 0, 240 - xTime + 5, 30, 0x0000);
     lcd.setTextColor(ST77XX_CYAN);
     lcd.setTextSize(3);
     lcd.setCursor(xTime, 5);
     lcd.print(timeStr);
     
-    // Área da data
+    // Data (SEM fundo preto)
     int xDate = calcularPosicaoX(dateStr, 2);
-    lcd.fillRect(xDate - 5, 30, 240 - xDate + 5, 25, 0x0000);
     lcd.setTextColor(ST77XX_YELLOW);
     lcd.setTextSize(2);
     lcd.setCursor(xDate, 35);
     lcd.print(dateStr);
     
-    // Área do clima
-    lcd.fillRect(0, 60, 240, 35, 0x0000);
-    
-    // Ícone do clima
+    // Ícone do clima (SEM fundo preto)
     desenharIconeClima(10, 65, weather.iconeClima);
     
-    // Temperatura
+    // Temperatura (SEM fundo preto)
     int xTemp = calcularPosicaoX(tempStr, 2);
     lcd.setTextColor(ST77XX_GREEN);
     lcd.setTextSize(2);
     lcd.setCursor(xTemp, 70);
     lcd.print(tempStr);
     
-    // Área da umidade
-    lcd.fillRect(0, 90, 240, 20, 0x0000);
-    
-    // Ícone de umidade
+    // Ícone de umidade (SEM fundo preto)
     desenharIconeUmidade(10, 95);
     
-    // Umidade
+    // Umidade (SEM fundo preto)
     int xUmid = calcularPosicaoX(umidadeStr, 1);
     lcd.setTextColor(ST77XX_BLUE);
     lcd.setTextSize(1);
     lcd.setCursor(xUmid, 95);
     lcd.print(umidadeStr);
     
-    // Área da cidade
-    lcd.fillRect(0, 105, 240, 15, 0x0000);
+    // Cidade (SEM fundo preto)
     char cidadeStr[] = "Pouso Alegre/MG";
     lcd.setTextColor(ST77XX_WHITE);
     lcd.setTextSize(1);

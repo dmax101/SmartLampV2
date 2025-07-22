@@ -140,17 +140,68 @@ void drawTestImage() {
     Serial.println("✓ Imagem de teste concluída");
 }
 
-void WallpaperManager::displayBMP(uint8_t* bmpData, int dataSize) {
-    Serial.printf("=== PROCESSANDO BMP: %d bytes ===\n", dataSize);
+bool WallpaperManager::loadBMPFile(const char* filename) {
+    Serial.printf("\n📂 === CARREGANDO BMP: %s ===\n", filename);
+    
+    if (!SPIFFS.exists(filename)) {
+        Serial.printf("❌ Arquivo não encontrado: %s\n", filename);
+        return false;
+    }
+    
+    File file = SPIFFS.open(filename, "r");
+    if (!file) {
+        Serial.printf("❌ Erro ao abrir arquivo: %s\n", filename);
+        return false;
+    }
+    
+    size_t fileSize = file.size();
+    Serial.printf("✓ Arquivo encontrado, tamanho: %zu bytes\n", fileSize);
+    
+    if (fileSize < 54) {
+        Serial.println("❌ Arquivo muito pequeno para BMP");
+        file.close();
+        return false;
+    }
+    
+    // Aloca buffer para o arquivo
+    uint8_t* bmpData = (uint8_t*)malloc(fileSize);
+    if (!bmpData) {
+        Serial.printf("❌ Erro ao alocar %zu bytes\n", fileSize);
+        file.close();
+        return false;
+    }
+    
+    // Lê arquivo completo
+    size_t bytesRead = file.readBytes((char*)bmpData, fileSize);
+    file.close();
+    
+    if (bytesRead != fileSize) {
+        Serial.printf("❌ Erro na leitura: lido %zu de %zu bytes\n", bytesRead, fileSize);
+        free(bmpData);
+        return false;
+    }
+    
+    Serial.printf("✓ Arquivo lido com sucesso: %zu bytes\n", bytesRead);
+    
+    // Processa o BMP
+    bool success = processBMP(bmpData, fileSize);
+    free(bmpData);
+    
+    return success;
+}
+
+bool WallpaperManager::processBMP(uint8_t* bmpData, size_t dataSize) {
+    Serial.printf("=== PROCESSANDO BMP: %zu bytes ===\n", dataSize);
     
     if (dataSize < 54) {
         Serial.println("❌ Arquivo muito pequeno para BMP");
-        return;
+        return false;
     }
     
+    // Verifica assinatura BMP
     if (bmpData[0] != 'B' || bmpData[1] != 'M') {
         Serial.printf("❌ Header inválido: %c%c (esperado: BM)\n", bmpData[0], bmpData[1]);
-        return;
+        return false;
     }
     
     // Lê header BMP
@@ -159,39 +210,87 @@ void WallpaperManager::displayBMP(uint8_t* bmpData, int dataSize) {
     uint32_t width = *(uint32_t*)(bmpData + 18);
     uint32_t height = *(uint32_t*)(bmpData + 22);
     uint16_t bitsPerPixel = *(uint16_t*)(bmpData + 28);
+    uint32_t compression = *(uint32_t*)(bmpData + 30);
     
-    Serial.printf("📊 BMP Header Info:\n");
-    Serial.printf("   Tamanho: %d bytes\n", fileSize);
-    Serial.printf("   Offset: %d\n", imageOffset);
-    Serial.printf("   Dimensões: %dx%d\n", width, height);
-    Serial.printf("   Bits/pixel: %d\n", bitsPerPixel);
+    Serial.printf("📊 BMP Info:\n");
+    Serial.printf("   Tamanho: %u bytes\n", fileSize);
+    Serial.printf("   Offset: %u\n", imageOffset);
+    Serial.printf("   Dimensões: %ux%u\n", width, height);
+    Serial.printf("   Bits/pixel: %u\n", bitsPerPixel);
+    Serial.printf("   Compressão: %u\n", compression);
     
+    // Valida formato
     if (bitsPerPixel != 24) {
-        Serial.printf("❌ BMP de %d bits não suportado (apenas 24-bit)\n", bitsPerPixel);
-        return;
+        Serial.printf("❌ BMP de %u bits não suportado (apenas 24-bit)\n", bitsPerPixel);
+        return false;
+    }
+    
+    if (compression != 0) {
+        Serial.println("❌ BMP comprimido não suportado");
+        return false;
     }
     
     if (imageOffset >= dataSize) {
-        Serial.println("❌ Offset inválido");
-        return;
+        Serial.println("❌ Offset de dados inválido");
+        return false;
     }
     
     Serial.println("✓ BMP válido! Renderizando...");
     
-    lcd.fillScreen(ST77XX_BLACK);
-    
-    // Desenha bordas para indicar sucesso
-    lcd.drawRect(0, 0, 240, 135, ST77XX_GREEN);
-    lcd.drawRect(1, 1, 238, 133, ST77XX_GREEN);
-    
-    // Texto de confirmação
-    lcd.setTextColor(ST77XX_WHITE);
-    lcd.setTextSize(1);
-    lcd.setCursor(10, 60);
-    lcd.printf("BMP CARREGADO: %dx%d", width, height);
+    // Renderiza a imagem
+    renderBMPToDisplay(bmpData + imageOffset, width, height);
     
     wallpaperLoaded = true;
-    Serial.println("🎉 BMP processado com sucesso!");
+    Serial.println("🎉 BMP carregado com sucesso!");
+    
+    return true;
+}
+
+void WallpaperManager::renderBMPToDisplay(uint8_t* imageData, uint32_t width, uint32_t height) {
+    Serial.printf("🎨 Renderizando BMP %ux%u no display...\n", width, height);
+    
+    lcd.fillScreen(ST77XX_BLACK);
+    
+    // Calcula escala e posicionamento para centralizar
+    float scaleX = (float)240 / width;
+    float scaleY = (float)135 / height;
+    float scale = min(scaleX, scaleY);
+    
+    uint16_t displayWidth = (uint16_t)(width * scale);
+    uint16_t displayHeight = (uint16_t)(height * scale);
+    uint16_t offsetX = (240 - displayWidth) / 2;
+    uint16_t offsetY = (135 - displayHeight) / 2;
+    
+    Serial.printf("   Escala: %.2f, Display: %ux%u, Offset: %u,%u\n", 
+                  scale, displayWidth, displayHeight, offsetX, offsetY);
+    
+    // BMP está armazenado de baixo para cima, então invertemos
+    uint32_t rowSize = ((width * 3 + 3) / 4) * 4; // Row padding to 4-byte boundary
+    
+    for (uint16_t y = 0; y < displayHeight; y++) {
+        for (uint16_t x = 0; x < displayWidth; x++) {
+            // Mapeia coordenadas do display para coordenadas da imagem
+            uint32_t imgX = (uint32_t)(x / scale);
+            uint32_t imgY = height - 1 - (uint32_t)(y / scale); // Inverte Y
+            
+            if (imgX < width && imgY < height) {
+                // Calcula posição no array de dados
+                uint32_t pixelOffset = imgY * rowSize + imgX * 3;
+                
+                // Lê pixel BGR
+                uint8_t b = imageData[pixelOffset];
+                uint8_t g = imageData[pixelOffset + 1];
+                uint8_t r = imageData[pixelOffset + 2];
+                
+                // Converte para RGB565
+                uint16_t color = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+                
+                lcd.drawPixel(offsetX + x, offsetY + y, color);
+            }
+        }
+    }
+    
+    Serial.println("✓ Renderização concluída");
 }
 
 bool WallpaperManager::initializeWallpaper() {
@@ -200,96 +299,34 @@ bool WallpaperManager::initializeWallpaper() {
     // Debug completo do SPIFFS
     debugSPIFFS();
     
-    // Se não há arquivos, cria um de teste
-    if (!SPIFFS.exists("/img.txt") && !SPIFFS.exists("/test.txt")) {
-        Serial.println("💡 Criando arquivo de teste...");
-        createTestFile();
-    }
-    
     return true;
 }
 
 bool WallpaperManager::loadWallpaperFromFile(const char* filename) {
-    Serial.printf("\n📂 === CARREGANDO: %s ===\n", filename);
+    // Tenta carregar bkgnd.bmp primeiro
+    if (loadBMPFile("/bkgnd2.bmp")) {
+        return true;
+    }
     
-    // Lista de arquivos para tentar
+    // Se não encontrar, tenta o arquivo especificado
+    if (filename && loadBMPFile(filename)) {
+        return true;
+    }
+    
+    // Lista de arquivos alternativos para tentar
     String filesToTry[] = {
-        String(filename),
-        "/test.txt",
-        "/img.txt"
+        "/wallpaper.bmp",
+        "/background.bmp",
+        "/img.bmp"
     };
     
-    for (int i = 0; i < 3; i++) {
-        String currentFile = filesToTry[i];
-        Serial.printf("🔍 Tentando: %s\n", currentFile.c_str());
-        
-        if (SPIFFS.exists(currentFile)) {
-            Serial.println("✓ Arquivo encontrado!");
-            
-            File file = SPIFFS.open(currentFile, "r");
-            if (!file) {
-                Serial.println("❌ Erro ao abrir arquivo");
-                continue;
-            }
-            
-            String content = file.readString();
-            file.close();
-            
-            Serial.printf("✓ Lido: %d caracteres\n", content.length());
-            
-            if (content.length() < 50) {
-                Serial.println("❌ Conteúdo muito pequeno, inválido como imagem");
-                continue;
-            }
-            
-            Serial.println("✓ Conteúdo parece válido, tentando decodificar...");
-            
-            // Remove prefixo Data URL se presente
-            int commaIndex = content.indexOf(',');
-            if (commaIndex != -1) {
-                Serial.printf("✓ Removendo prefixo Data URL (posição %d)\n", commaIndex);
-                content = content.substring(commaIndex + 1);
-            }
-            
-            // Limpa dados
-            content.replace("\n", "");
-            content.replace("\r", "");
-            content.replace(" ", "");
-            content.replace("\t", "");
-            
-            Serial.printf("✓ Base64 limpo: %d caracteres\n", content.length());
-            
-            // Tenta decodificar
-            int estimatedSize = (content.length() * 3) / 4 + 100;
-            uint8_t* imageBuffer = (uint8_t*)malloc(estimatedSize);
-            
-            if (!imageBuffer) {
-                Serial.printf("ERRO: Não foi possível alocar %d bytes\n", estimatedSize);
-                drawTestImage();
-                return false;
-            }
-            
-            Serial.printf("✓ Buffer alocado: %d bytes\n", estimatedSize);
-            
-            int decodedSize = base64_decode_simple(content.c_str(), imageBuffer, estimatedSize);
-            
-            Serial.printf("✓ Decodificado: %d bytes\n", decodedSize);
-            
-            if (decodedSize > 54) {
-                displayBMP(imageBuffer, decodedSize);
-                free(imageBuffer);
-                return true;
-            } else {
-                Serial.println("❌ Decodificação falhou, tamanho inválido");
-            }
-            
-            free(imageBuffer);
-        } else {
-            Serial.println("❌ Arquivo não existe");
+    for (const String& file : filesToTry) {
+        if (loadBMPFile(file.c_str())) {
+            return true;
         }
     }
     
-    Serial.println("❌ NENHUM ARQUIVO VÁLIDO ENCONTRADO!");
+    Serial.println("❌ Nenhum arquivo BMP válido encontrado!");
     drawTestImage();
     return false;
 }
@@ -297,8 +334,8 @@ bool WallpaperManager::loadWallpaperFromFile(const char* filename) {
 void WallpaperManager::displayWallpaperWithOverlay() {
     Serial.println("\n=== EXIBINDO WALLPAPER ===");
     
-    if (!loadWallpaperFromFile("/img.txt")) {
-        Serial.println("Falha ao carregar - usando teste");
+    if (!loadWallpaperFromFile("/bkgnd2.bmp")) {
+        Serial.println("Falha ao carregar wallpaper - usando imagem de teste");
     }
     
     delay(2000);

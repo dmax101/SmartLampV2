@@ -13,6 +13,7 @@ private:
     
 public:
     WeatherManager();
+    void begin(); // Adicionar este método
     bool updateWeatherData();
     WeatherData getCurrentWeather() const;
     bool needsUpdate() const;

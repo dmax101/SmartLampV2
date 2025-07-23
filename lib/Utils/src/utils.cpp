@@ -1,17 +1,15 @@
 #include "utils.h"
-#include <config.h>
-#include <display.h>
-#include <time.h>
+#include <WiFi.h>
 
-// Inicialização de variáveis estáticas
-int TimeManager::lastMinute = -1;
+// Variáveis estáticas da classe TimeManager
+struct tm TimeManager::lastTime = {};
+bool TimeManager::timeInitialized = false;
 
-// ========== WiFiManager ==========
-
+// Implementação WiFiManager
 bool WiFiManager::connectToWiFi() {
-    Serial.println("Conectando ao WiFi...");
-    showStatusMessage("Conectando WiFi...", ST77XX_YELLOW);
+    Serial.printf("Conectando ao WiFi: %s\n", ssid);
     
+    WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
     
     int attempts = 0;
@@ -22,16 +20,20 @@ bool WiFiManager::connectToWiFi() {
     }
     
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\nWiFi conectado!");
-        Serial.print("IP: ");
-        Serial.println(WiFi.localIP());
-        showStatusMessage("WiFi OK!", ST77XX_GREEN);
-        delay(1000);
+        Serial.printf("\nWiFi conectado! IP: %s\n", WiFi.localIP().toString().c_str());
         return true;
     } else {
-        Serial.println("\nFalha na conexão WiFi");
-        showStatusMessage("Erro WiFi!", ST77XX_RED);
+        Serial.println("\nFalha na conexão WiFi!");
         return false;
+    }
+}
+
+void WiFiManager::reconnect() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("Reconectando WiFi...");
+        WiFi.disconnect();
+        delay(1000);
+        connectToWiFi();
     }
 }
 
@@ -39,79 +41,94 @@ bool WiFiManager::isConnected() {
     return WiFi.status() == WL_CONNECTED;
 }
 
-void WiFiManager::showConnectionStatus() {
-    if (isConnected()) {
-        showStatusMessage("WiFi Conectado", ST77XX_GREEN);
-    } else {
-        showStatusMessage("WiFi Desconectado", ST77XX_RED);
+void WiFiManager::printStatus() {
+    Serial.printf("WiFi Status: %d\n", WiFi.status());
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("RSSI: %d dBm\n", WiFi.RSSI());
     }
 }
 
-void WiFiManager::reconnect() {
-    if (!isConnected()) {
-        Serial.println("Tentando reconectar WiFi...");
-        WiFi.reconnect();
+// Implementação TimeManager
+bool TimeManager::initNTP() {
+    Serial.println("Inicializando NTP...");
+    
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi não conectado - não é possível sincronizar NTP");
+        return false;
     }
-}
-
-// ========== TimeManager ==========
-
-void TimeManager::initNTP() {
-    Serial.println("Configurando NTP...");
-    showStatusMessage("Configurando hora...", ST77XX_CYAN);
     
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     
     // Aguarda sincronização
-    struct tm timeinfo;
     int attempts = 0;
-    while (!getLocalTime(&timeinfo) && attempts < 10) {
-        Serial.println("Aguardando sincronização NTP...");
+    while (!getLocalTime(&lastTime) && attempts < 10) {
+        Serial.print(".");
         delay(1000);
         attempts++;
     }
     
-    if (getLocalTime(&timeinfo)) {
-        Serial.println("NTP sincronizado!");
-        showStatusMessage("Hora OK!", ST77XX_GREEN);
-        lastMinute = timeinfo.tm_min;
-    } else {
-        Serial.println("Falha na sincronização NTP");
-        showStatusMessage("Erro NTP!", ST77XX_RED);
-    }
-    
-    delay(1000);
-}
-
-bool TimeManager::hasMinuteChanged() {
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
+    if (attempts >= 10) {
+        Serial.println("\nFalha na sincronização NTP!");
+        timeInitialized = false;
         return false;
     }
     
-    if (timeinfo.tm_min != lastMinute) {
-        lastMinute = timeinfo.tm_min;
+    Serial.printf("\nNTP sincronizado: %02d:%02d:%02d %02d/%02d/%04d\n", 
+                  lastTime.tm_hour, lastTime.tm_min, lastTime.tm_sec,
+                  lastTime.tm_mday, lastTime.tm_mon + 1, lastTime.tm_year + 1900);
+    
+    timeInitialized = true;
+    return true;
+}
+
+bool TimeManager::initialize() {
+    Serial.println("Inicializando TimeManager...");
+    return initNTP();
+}
+
+bool TimeManager::initializeTime() {
+    return initialize();
+}
+
+bool TimeManager::hasMinuteChanged() {
+    if (!timeInitialized) {
+        return false;
+    }
+    
+    struct tm currentTime;
+    if (!getLocalTime(&currentTime)) {
+        return false;
+    }
+    
+    // Verifica se o minuto mudou
+    bool changed = (currentTime.tm_min != lastTime.tm_min) || 
+                   (currentTime.tm_hour != lastTime.tm_hour) ||
+                   (currentTime.tm_mday != lastTime.tm_mday);
+    
+    if (changed) {
+        lastTime = currentTime;
         return true;
     }
     
     return false;
 }
 
-String TimeManager::getCurrentTime() {
+String TimeManager::getCurrentTimeString() {
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
-        return "--:--";
+        return "--:--"; // Corrigido: removido trigraphs
     }
     
-    char timeStr[10];
+    char timeStr[8];
     sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
     return String(timeStr);
 }
 
-String TimeManager::getCurrentDate() {
+String TimeManager::getCurrentDateString() {
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
-        return "--/--/----";
+        return "--/--/----"; // Corrigido: removido trigraphs
     }
     
     char dateStr[12];

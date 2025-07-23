@@ -14,25 +14,17 @@ bool systemInitialized = false;
 
 void setup() {
     Serial.begin(115200);
-    delay(2000); // Aguarda serial monitor
+    delay(2000);
     
     Serial.println("=== SMART LAMP INICIANDO ===");
     
     // Inicializa SPIFFS primeiro
     Serial.println("Inicializando SPIFFS...");
-    if (!SPIFFS.begin(true)) { // true = format if failed
-        Serial.println("ERRO: Falha ao inicializar SPIFFS");
+    if (!SPIFFS.begin(true)) {
+        Serial.println("Erro ao montar SPIFFS!");
+        return;
     } else {
-        Serial.println("SPIFFS inicializado com sucesso");
-        
-        // Lista arquivos
-        File root = SPIFFS.open("/");
-        File file = root.openNextFile();
-        Serial.println("Arquivos no SPIFFS:");
-        while (file) {
-            Serial.printf("  %s (%d bytes)\n", file.name(), file.size());
-            file = root.openNextFile();
-        }
+        Serial.println("SPIFFS montado com sucesso");
     }
     
     // Inicializa display
@@ -43,56 +35,49 @@ void setup() {
     showStatusMessage("Smart Lamp v2.0", ST77XX_WHITE);
     delay(2000);
     
+    // Conecta WiFi
+    Serial.println("Conectando WiFi...");
+    showStatusMessage("Conectando WiFi...", ST77XX_YELLOW);
+    if (WiFiManager::connectToWiFi()) {
+        showStatusMessage("WiFi Conectado!", ST77XX_GREEN);
+        delay(1000);
+        
+        // Inicializa NTP
+        Serial.println("Sincronizando horário...");
+        showStatusMessage("Sincronizando horário...", ST77XX_CYAN);
+        TimeManager::initNTP();
+        delay(1000);
+    } else {
+        showStatusMessage("Falha WiFi!", ST77XX_RED);
+        delay(2000);
+    }
+    
+    // Inicializa weather manager
+    Serial.println("Inicializando gerenciador de clima...");
+    weatherManager.begin(); // Agora deve funcionar
+    
     // Inicializa e testa wallpaper
     Serial.println("Inicializando wallpaper...");
     WallpaperManager::initializeWallpaper();
     
-    // Testa o wallpaper imediatamente
-    Serial.println("Testando carregamento de wallpaper...");
-    clearStatusMessages();
-    WallpaperManager::displayWallpaperWithOverlay();
-    
-    // Aguarda para ver o resultado
-    delay(5000);
-    
-    // Conecta ao WiFi
-    if (WiFiManager::connectToWiFi()) {
-        clearStatusMessages();
-        TimeManager::initNTP();
-        
-        // Obtém dados do clima
-        Serial.println("Obtendo dados do clima...");
-        bool climaOK = weatherManager.updateWeatherData();
-        if (!climaOK) {
-            weatherManager.setDefaultValues();
-        }
-        
-        // Recarrega wallpaper após configurações
-        Serial.println("Recarregando wallpaper...");
-        WallpaperManager::displayWallpaperWithOverlay();
-        
-        systemInitialized = true;
-    } else {
-        showErrorMessage("Erro WiFi!");
-        delay(5000);
-    }
-    
+    systemInitialized = true;
     forceFullUpdate = true;
+    Serial.println("=== INICIALIZAÇÃO COMPLETA ===");
 }
 
 void loop() {
-    // Se não inicializado, tenta novamente
-    if (!systemInitialized) {
-        if (WiFiManager::connectToWiFi()) {
-            clearStatusMessages();
-            TimeManager::initNTP();
-            WallpaperManager::displayWallpaperWithOverlay();
-            systemInitialized = true;
-            forceFullUpdate = true;
-        } else {
-            delay(5000);
-            return;
+    // Verifica conexão WiFi
+    if (!WiFiManager::isConnected()) {
+        if (systemInitialized) {
+            Serial.println("WiFi desconectado, tentando reconectar...");
+            WiFiManager::reconnect();
+            
+            if (WiFiManager::isConnected()) {
+                TimeManager::initialize();
+            }
         }
+        delay(5000);
+        return;
     }
     
     // Controla frequência de atualização
@@ -101,18 +86,6 @@ void loop() {
         return;
     }
     lastDisplayUpdate = millis();
-    
-    // Verifica WiFi
-    if (!WiFiManager::isConnected()) {
-        if (forceFullUpdate) {
-            clearStatusMessages();
-            WiFiManager::showConnectionStatus();
-            forceFullUpdate = false;
-            systemInitialized = false;
-        }
-        delay(1000);
-        return;
-    }
     
     // Detecta mudança de minuto
     bool minuteChanged = TimeManager::hasMinuteChanged();

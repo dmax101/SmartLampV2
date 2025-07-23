@@ -3,26 +3,31 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <time.h>
+#include <config.h>
 
 // Classe para gerenciar WiFi
 class WiFiManager {
 public:
     static bool connectToWiFi();
-    static bool isConnected();
-    static void showConnectionStatus();
     static void reconnect();
+    static bool isConnected();
+    static void printStatus();
 };
 
 // Classe para gerenciar tempo/NTP
 class TimeManager {
 private:
-    static int lastMinute;
+    static struct tm lastTime;
+    static bool timeInitialized;
     
 public:
-    static void initNTP();
+    static bool initializeTime();
+    static bool initNTP();           // Adicionar método initNTP
+    static bool initialize();        // Adicionar método initialize
     static bool hasMinuteChanged();
-    static String getCurrentTime();
-    static String getCurrentDate();
+    static String getCurrentTimeString();
+    static String getCurrentDateString();
 };
 
 #endif

@@ -1,8 +1,35 @@
 #include "wallpaper.h"
-#include <display.h>
 #include <SPIFFS.h>
+#include <config.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7789.h>
+
+// Adicionar declaração do lcd aqui
+extern Adafruit_ST7789 lcd;
 
 bool WallpaperManager::wallpaperLoaded = false;
+
+// Função de imagem de teste
+void drawTestImage() {
+    Serial.println("🎨 Desenhando imagem de teste...");
+    
+    lcd.fillScreen(ST77XX_BLACK);
+    
+    // Desenha faixas coloridas
+    lcd.fillRect(0, 0, 80, 135, ST77XX_RED);
+    lcd.fillRect(80, 0, 80, 135, ST77XX_GREEN);
+    lcd.fillRect(160, 0, 80, 135, ST77XX_BLUE);
+    
+    // Texto indicativo
+    lcd.setTextColor(ST77XX_WHITE);
+    lcd.setTextSize(1);
+    lcd.setCursor(10, 60);
+    lcd.println("WALLPAPER");
+    lcd.setCursor(10, 75);
+    lcd.println("NAO ENCONTRADO");
+    
+    Serial.println("✅ Imagem de teste desenhada");
+}
 
 // Função COMPLETA de debug do SPIFFS
 void debugSPIFFS() {
@@ -50,7 +77,6 @@ void debugSPIFFS() {
     
     if (fileCount == 0) {
         Serial.println("❌ NENHUM ARQUIVO ENCONTRADO!");
-        Serial.println("💡 ISSO SIGNIFICA QUE O UPLOAD DO FILESYSTEM NÃO FOI FEITO!");
         Serial.println("💡 Execute: PlatformIO -> Upload Filesystem Image");
     } else {
         Serial.printf("✓ Total de %d arquivo(s) encontrado(s)\n", fileCount);
@@ -58,86 +84,6 @@ void debugSPIFFS() {
     
     root.close();
     Serial.println("=== FIM DEBUG SPIFFS ===\n");
-}
-
-// Cria arquivo de teste no SPIFFS
-void createTestFile() {
-    Serial.println("=== CRIANDO ARQUIVO DE TESTE ===");
-    
-    // Dados Base64 de um BMP 1x1 pixel vermelho
-    String testBMP = "Qk0+AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABACAAAAAAAAgAAAASCwAAEgsAAAAAAAAAAAAA/wAA";
-    
-    File file = SPIFFS.open("/test.txt", "w");
-    if (file) {
-        file.print("data:image/bmp;base64,");
-        file.print(testBMP);
-        file.close();
-        Serial.println("✓ Arquivo de teste criado: /test.txt");
-    } else {
-        Serial.println("❌ Erro ao criar arquivo de teste");
-    }
-}
-
-// Função simples de decodificação Base64
-static int base64_decode_simple(const char* input, uint8_t* output, int outputLen) {
-    const char* chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    int inputLen = strlen(input);
-    int outputIndex = 0;
-    
-    for (int i = 0; i < inputLen && outputIndex < outputLen - 3; i += 4) {
-        uint32_t value = 0;
-        int padding = 0;
-        
-        for (int j = 0; j < 4; j++) {
-            if (i + j < inputLen) {
-                char c = input[i + j];
-                if (c == '=') {
-                    padding++;
-                    break;
-                }
-                
-                const char* pos = strchr(chars, c);
-                if (pos) {
-                    value = (value << 6) | (pos - chars);
-                }
-            }
-        }
-        
-        if (padding < 3) output[outputIndex++] = (value >> 16) & 0xFF;
-        if (padding < 2) output[outputIndex++] = (value >> 8) & 0xFF;
-        if (padding < 1) output[outputIndex++] = value & 0xFF;
-    }
-    
-    return outputIndex;
-}
-
-// Desenha uma imagem de teste colorida
-void drawTestImage() {
-    Serial.println("🎨 Desenhando imagem de teste colorida...");
-    
-    lcd.fillScreen(ST77XX_BLACK);
-    
-    // Desenha retângulos coloridos
-    lcd.fillRect(0, 0, 80, 135, ST77XX_RED);
-    lcd.fillRect(80, 0, 80, 135, ST77XX_GREEN);
-    lcd.fillRect(160, 0, 80, 135, ST77XX_BLUE);
-    
-    // Adiciona texto
-    lcd.setTextColor(ST77XX_WHITE);
-    lcd.setTextSize(1);
-    lcd.setCursor(10, 10);
-    lcd.print("IMG.TXT NAO ENCONTRADO");
-    
-    lcd.setCursor(10, 25);
-    lcd.print("Faca upload filesystem!");
-    
-    lcd.setCursor(10, 40);
-    lcd.print("PlatformIO -> Upload");
-    
-    lcd.setCursor(10, 55);
-    lcd.print("Filesystem Image");
-    
-    Serial.println("✓ Imagem de teste concluída");
 }
 
 bool WallpaperManager::loadBMPFile(const char* filename) {
@@ -303,7 +249,7 @@ bool WallpaperManager::initializeWallpaper() {
 }
 
 bool WallpaperManager::loadWallpaperFromFile(const char* filename) {
-    // Tenta carregar bkgnd.bmp primeiro
+    // Tenta carregar bkgnd2.bmp primeiro
     if (loadBMPFile("/bkgnd2.bmp")) {
         return true;
     }
@@ -315,6 +261,7 @@ bool WallpaperManager::loadWallpaperFromFile(const char* filename) {
     
     // Lista de arquivos alternativos para tentar
     String filesToTry[] = {
+        "/bkgnd.bmp",
         "/wallpaper.bmp",
         "/background.bmp",
         "/img.bmp"
@@ -334,7 +281,7 @@ bool WallpaperManager::loadWallpaperFromFile(const char* filename) {
 void WallpaperManager::displayWallpaperWithOverlay() {
     Serial.println("\n=== EXIBINDO WALLPAPER ===");
     
-    if (!loadWallpaperFromFile("/bkgnd2.bmp")) {
+    if (!loadWallpaperFromFile()) {
         Serial.println("Falha ao carregar wallpaper - usando imagem de teste");
     }
     
@@ -343,4 +290,8 @@ void WallpaperManager::displayWallpaperWithOverlay() {
 
 bool WallpaperManager::isWallpaperLoaded() {
     return wallpaperLoaded;
+}
+
+bool WallpaperManager::displayBMP(uint8_t* bmpData, int dataSize) {
+    return processBMP(bmpData, (size_t)dataSize);
 }

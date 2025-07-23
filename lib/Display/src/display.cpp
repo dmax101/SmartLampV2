@@ -1,6 +1,7 @@
 #include "display.h"
 #include <config.h>
 #include <time.h>
+#include "wallpaper.h"  // Adicionar include do wallpaper
 
 // Inicializa o display
 Adafruit_ST7789 lcd = Adafruit_ST7789(LCD_CS, LCD_DC, LCD_RST);
@@ -30,12 +31,13 @@ int16_t calcularPosicaoX(const char* texto, uint8_t tamanho, int16_t margemDirei
 }
 
 void clearDisplayArea(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t color) {
-    lcd.fillRect(x, y, w, h, color);
+    // REMOVIDO: Não limpa mais áreas, preserva o wallpaper
+    Serial.printf("🚫 clearDisplayArea chamado mas ignorado para preservar wallpaper\n");
 }
 
 void clearStatusMessages() {
-    // Limpa toda a tela
-    lcd.fillScreen(ST77XX_BLACK);
+    // REMOVIDO: Não limpa mais a tela toda, preserva o wallpaper
+    Serial.println("🚫 clearStatusMessages chamado mas ignorado para preservar wallpaper");
 }
 
 void desenharIconeUmidade(int16_t x, int16_t y) {
@@ -76,7 +78,14 @@ void desenharIconeClima(int16_t x, int16_t y, String icone) {
 }
 
 void drawInterfaceElements(const WeatherData& weather) {
-    Serial.println("🎨 Desenhando elementos da interface...");
+    Serial.println("🎨 === REDESENHANDO INTERFACE COMPLETA ===");
+    
+    // PRIMEIRO: Redesenha o wallpaper
+    Serial.println("🖼️ Redesenhando wallpaper...");
+    if (!WallpaperManager::loadWallpaperFromFile()) {
+        Serial.println("❌ Falha ao carregar wallpaper - usando fundo preto");
+        lcd.fillScreen(ST77XX_BLACK);
+    }
     
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
@@ -97,7 +106,7 @@ void drawInterfaceElements(const WeatherData& weather) {
     
     Serial.printf("📊 Dados: %s | %s | %s | %s\n", timeStr, dateStr, tempStr, umidadeStr);
     
-    // Hora
+    // DESENHA HORA (sobre o wallpaper)
     int xTime = calcularPosicaoX(timeStr, 3);
     lcd.setTextColor(ST77XX_CYAN);
     lcd.setTextSize(3);
@@ -105,7 +114,7 @@ void drawInterfaceElements(const WeatherData& weather) {
     lcd.print(timeStr);
     Serial.printf("⏰ Hora desenhada em x=%d\n", xTime);
     
-    // Data
+    // DESENHA DATA (sobre o wallpaper)
     int xDate = calcularPosicaoX(dateStr, 2);
     lcd.setTextColor(ST77XX_YELLOW);
     lcd.setTextSize(2);
@@ -113,39 +122,39 @@ void drawInterfaceElements(const WeatherData& weather) {
     lcd.print(dateStr);
     Serial.printf("📅 Data desenhada em x=%d\n", xDate);
     
-    // Temperatura (com margem maior para dar espaço ao ícone)
-    int xTemp = calcularPosicaoX(tempStr, 2, 50); // Margem de 50 pixels em vez de 10
+    // DESENHA TEMPERATURA (sobre o wallpaper)
+    int xTemp = calcularPosicaoX(tempStr, 2, 50); // Margem de 50 pixels
     lcd.setTextColor(ST77XX_GREEN);
     lcd.setTextSize(2);
     lcd.setCursor(xTemp, 70);
     lcd.print(tempStr);
     Serial.printf("🌡️ Temperatura desenhada em x=%d\n", xTemp);
     
-    // Ícone do clima APÓS a temperatura (mais à direita)
+    // Ícone do clima APÓS a temperatura
     int16_t x1, y1;
     uint16_t w, h;
     lcd.setTextSize(2);
     lcd.getTextBounds(tempStr, 0, 0, &x1, &y1, &w, &h);
-    int iconClimaX = xTemp + w + 5; // 5 pixels de espaço após o texto
+    int iconClimaX = xTemp + w + 5;
     desenharIconeClima(iconClimaX, 65, weather.iconeClima);
     Serial.printf("🌤️ Ícone clima desenhado em x=%d\n", iconClimaX);
     
-    // Umidade (com margem maior para dar espaço ao ícone)
-    int xUmid = calcularPosicaoX(umidadeStr, 1, 30); // Margem de 30 pixels em vez de 10
+    // DESENHA UMIDADE (sobre o wallpaper)
+    int xUmid = calcularPosicaoX(umidadeStr, 1, 30); // Margem de 30 pixels
     lcd.setTextColor(ST77XX_BLUE);
     lcd.setTextSize(1);
     lcd.setCursor(xUmid, 95);
     lcd.print(umidadeStr);
     Serial.printf("💧 Umidade desenhada em x=%d\n", xUmid);
     
-    // Ícone de umidade APÓS a umidade (mais à direita)
+    // Ícone de umidade APÓS a umidade
     lcd.setTextSize(1);
     lcd.getTextBounds(umidadeStr, 0, 0, &x1, &y1, &w, &h);
-    int iconUmidX = xUmid + w + 5; // 5 pixels de espaço após o texto
+    int iconUmidX = xUmid + w + 5;
     desenharIconeUmidade(iconUmidX, 95);
     Serial.printf("💧 Ícone umidade desenhado em x=%d\n", iconUmidX);
     
-    // Cidade
+    // DESENHA CIDADE (sobre o wallpaper)
     char cidadeStr[] = "Pouso Alegre/MG";
     lcd.setTextColor(ST77XX_WHITE);
     lcd.setTextSize(1);
@@ -154,14 +163,16 @@ void drawInterfaceElements(const WeatherData& weather) {
     lcd.print(cidadeStr);
     Serial.printf("🏙️ Cidade desenhada em x=%d\n", xCidade);
     
-    Serial.println("✅ Interface completa desenhada!");
+    Serial.println("✅ Interface completa redesenhada!");
 }
 
 void clearArea(int16_t x, int16_t y, uint16_t w, uint16_t h) {
-    lcd.fillRect(x, y, w, h, ST77XX_BLACK);
+    // REMOVIDO: Não limpa mais áreas, preserva o wallpaper
+    Serial.printf("🚫 clearArea chamado mas ignorado para preservar wallpaper\n");
 }
 
 void showErrorMessage(const char* message) {
+    // Desenha mensagem de erro SEM fundo preto
     lcd.setTextColor(ST77XX_RED);
     lcd.setTextSize(1);
     lcd.setCursor(10, 60);
@@ -169,6 +180,7 @@ void showErrorMessage(const char* message) {
 }
 
 void showStatusMessage(const char* message, uint16_t color) {
+    // Desenha mensagem de status SEM fundo preto
     lcd.setTextColor(color);
     lcd.setTextSize(1);
     lcd.setCursor(10, 60);

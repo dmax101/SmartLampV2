@@ -27,5 +27,6 @@ void clearStatusMessages();
 int16_t calcularPosicaoX(const char* texto, uint8_t tamanho, int16_t margemDireita = 10);
 void showErrorMessage(const char* message);
 void showStatusMessage(const char* message, uint16_t color);
+void animacaoChuvaLimpeza();
 
 #endif

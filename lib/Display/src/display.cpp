@@ -79,6 +79,8 @@ void desenharIconeClima(int16_t x, int16_t y, String icone) {
 
 void drawInterfaceElements(const WeatherData& weather) {
     Serial.println("🎨 === REDESENHANDO INTERFACE COMPLETA ===");
+
+    animacaoChuvaLimpeza();
     
     // PRIMEIRO: Redesenha o wallpaper
     Serial.println("🖼️ Redesenhando wallpaper...");
@@ -185,4 +187,32 @@ void showStatusMessage(const char* message, uint16_t color) {
     lcd.setTextSize(1);
     lcd.setCursor(10, 60);
     lcd.println(message);
+}
+
+void animacaoChuvaLimpeza() {
+    const int numPingos = 30; // Quantidade de ondas
+    int pingoX[numPingos];
+    int pingoY[numPingos];
+
+    // Inicializa posições X e Y aleatórias para os pingos
+    for (int i = 0; i < numPingos; i++) {
+        pingoX[i] = random(10, 230);
+        pingoY[i] = random(10, 125);
+    }
+
+    // Animação: ondas circulares crescendo pela tela
+    for (int frame = 0; frame < 20; frame++) {
+        // Não limpa o fundo, desenha sobre o conteúdo anterior
+        for (int i = 0; i < numPingos; i++) {
+            int raio = 2 + frame * 7;
+            lcd.drawCircle(pingoX[i], pingoY[i], raio, ST77XX_BLACK);
+            if (frame > 4) {
+                lcd.drawCircle(pingoX[i], pingoY[i], raio - 4, ST77XX_BLACK);
+            }
+        }
+        delay(35);
+    }
+
+    // Ao final, cobre tudo com azul para garantir que o fundo foi escondido
+    // lcd.fillRect(0, 0, 240, 135, ST77XX_BLUE);
 }

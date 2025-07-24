@@ -51,120 +51,124 @@ void desenharIconeUmidade(int16_t x, int16_t y) {
 }
 
 void desenharIconeClima(int16_t x, int16_t y, String icone) {
+    // Ícones menores e proporcionais à temperatura
     if (icone == "01d" || icone == "01n") { // Sol
-        lcd.fillCircle(x + 15, y + 15, 8, ST77XX_YELLOW);
+        lcd.fillCircle(x + 10, y + 10, 5, ST77XX_YELLOW); // Raio menor
         // Raios do sol
         for (int i = 0; i < 8; i++) {
             float angle = i * PI / 4;
-            int x1 = x + 15 + cos(angle) * 12;
-            int y1 = y + 15 + sin(angle) * 12;
-            int x2 = x + 15 + cos(angle) * 15;
-            int y2 = y + 15 + sin(angle) * 15;
+            int x1 = x + 10 + cos(angle) * 8;
+            int y1 = y + 10 + sin(angle) * 8;
+            int x2 = x + 10 + cos(angle) * 11;
+            int y2 = y + 10 + sin(angle) * 11;
             lcd.drawLine(x1, y1, x2, y2, ST77XX_YELLOW);
         }
     } 
     else if (icone == "02d" || icone == "02n" || icone == "03d" || icone == "03n") { // Nuvens
-        lcd.fillCircle(x + 8, y + 18, 6, ST77XX_WHITE);
-        lcd.fillCircle(x + 15, y + 15, 8, ST77XX_WHITE);
-        lcd.fillCircle(x + 22, y + 18, 6, ST77XX_WHITE);
-        lcd.fillRect(x + 8, y + 18, 14, 8, ST77XX_WHITE);
+        lcd.fillCircle(x + 5, y + 13, 4, ST77XX_WHITE);
+        lcd.fillCircle(x + 10, y + 10, 5, ST77XX_WHITE);
+        lcd.fillCircle(x + 15, y + 13, 4, ST77XX_WHITE);
+        lcd.fillRect(x + 5, y + 13, 10, 6, ST77XX_WHITE);
     }
     else { // Padrão - nuvem
-        lcd.fillCircle(x + 8, y + 18, 6, ST77XX_WHITE);
-        lcd.fillCircle(x + 15, y + 15, 8, ST77XX_WHITE);
-        lcd.fillCircle(x + 22, y + 18, 6, ST77XX_WHITE);
-        lcd.fillRect(x + 8, y + 18, 14, 8, ST77XX_WHITE);
+        lcd.fillCircle(x + 5, y + 13, 4, ST77XX_WHITE);
+        lcd.fillCircle(x + 10, y + 10, 5, ST77XX_WHITE);
+        lcd.fillCircle(x + 15, y + 13, 4, ST77XX_WHITE);
+        lcd.fillRect(x + 5, y + 13, 10, 6, ST77XX_WHITE);
     }
 }
 
 void drawInterfaceElements(const WeatherData& weather) {
     Serial.println("🎨 === REDESENHANDO INTERFACE COMPLETA ===");
 
+    // Variáveis para cálculo de texto
+    int16_t x1, y1;
+    uint16_t w, h;
+
     animacaoChuvaLimpeza();
-    
-    // PRIMEIRO: Redesenha o wallpaper
+
+    // Redesenha o wallpaper
     Serial.println("🖼️ Redesenhando wallpaper...");
     if (!WallpaperManager::loadWallpaperFromFile()) {
         Serial.println("❌ Falha ao carregar wallpaper - usando fundo preto");
         lcd.fillScreen(ST77XX_BLACK);
     }
-    
+
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
         Serial.println("❌ Falha ao obter o tempo");
         return;
     }
-    
+
     // Prepara strings para exibição
     char timeStr[8];
     char dateStr[12];
     char tempStr[20];
     char umidadeStr[15];
-    
+
     sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
     sprintf(dateStr, "%02d/%02d/%04d", timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
-    sprintf(tempStr, "%.1f%cC", weather.temperatura, 176); // 176 é o código ASCII para o símbolo de graus (°)
+    sprintf(tempStr, "%.1f %cC", weather.temperatura, 0xF7);
     sprintf(umidadeStr, "%.0f%%", weather.umidade);
-    
+
     Serial.printf("📊 Dados: %s | %s | %s | %s\n", timeStr, dateStr, tempStr, umidadeStr);
-    
-    // DESENHA HORA (sobre o wallpaper)
+
+    // DESENHA HORA
     int xTime = calcularPosicaoX(timeStr, 3);
     lcd.setTextColor(ST77XX_CYAN);
     lcd.setTextSize(3);
     lcd.setCursor(xTime, 5);
     lcd.print(timeStr);
     Serial.printf("⏰ Hora desenhada em x=%d\n", xTime);
-    
-    // DESENHA DATA (sobre o wallpaper)
+
+    // DESENHA DATA
     int xDate = calcularPosicaoX(dateStr, 2);
     lcd.setTextColor(ST77XX_YELLOW);
     lcd.setTextSize(2);
     lcd.setCursor(xDate, 35);
     lcd.print(dateStr);
     Serial.printf("📅 Data desenhada em x=%d\n", xDate);
-    
-    // DESENHA TEMPERATURA (sobre o wallpaper)
-    int xTemp = calcularPosicaoX(tempStr, 2, 50); // Margem de 50 pixels
-    lcd.setTextColor(ST77XX_GREEN);
-    lcd.setTextSize(2);
-    lcd.setCursor(xTemp, 70);
-    lcd.print(tempStr);
-    Serial.printf("🌡️ Temperatura desenhada em x=%d\n", xTemp);
-    
-    // Ícone do clima APÓS a temperatura
-    int16_t x1, y1;
-    uint16_t w, h;
+
+    // ALINHAMENTO À DIREITA PARA TEMPERATURA E UMIDADE
+    // Temperatura alinhada à direita na metade superior
     lcd.setTextSize(2);
     lcd.getTextBounds(tempStr, 0, 0, &x1, &y1, &w, &h);
-    int iconClimaX = xTemp + w + 5;
-    desenharIconeClima(iconClimaX, 65, weather.iconeClima);
+    int xTemp = 240 - w - 10; // 10px de margem direita
+    int yTemp = 80;           // Aproxima da umidade (antes era 70)
+    lcd.setTextColor(ST77XX_GREEN);
+    lcd.setCursor(xTemp, yTemp);
+    lcd.print(tempStr);
+    Serial.printf("🌡️ Temperatura desenhada em x=%d\n", xTemp);
+
+    // Ícone do clima à direita da temperatura, com espaço extra
+    int iconClimaX = xTemp - 28;
+    desenharIconeClima(iconClimaX, yTemp - 5, weather.iconeClima);
     Serial.printf("🌤️ Ícone clima desenhado em x=%d\n", iconClimaX);
-    
-    // DESENHA UMIDADE (sobre o wallpaper)
-    int xUmid = calcularPosicaoX(umidadeStr, 1, 30); // Margem de 30 pixels
+
+    // Umidade alinhada à direita na metade inferior
+    lcd.setTextSize(2);
+    lcd.getTextBounds(umidadeStr, 0, 0, &x1, &y1, &w, &h);
+    int xUmid = 240 - w - 10;
+    int yUmid = 105;          // Mantém posição da umidade
     lcd.setTextColor(ST77XX_BLUE);
-    lcd.setTextSize(1);
-    lcd.setCursor(xUmid, 95);
+    lcd.setCursor(xUmid, yUmid);
     lcd.print(umidadeStr);
     Serial.printf("💧 Umidade desenhada em x=%d\n", xUmid);
-    
-    // Ícone de umidade APÓS a umidade
-    lcd.setTextSize(1);
-    lcd.getTextBounds(umidadeStr, 0, 0, &x1, &y1, &w, &h);
-    int iconUmidX = xUmid + w + 5;
-    desenharIconeUmidade(iconUmidX, 95);
+
+    // Ícone de umidade à direita da umidade, com espaço extra
+    int iconUmidX = xUmid - 20;
+    desenharIconeUmidade(iconUmidX, yUmid);
     Serial.printf("💧 Ícone umidade desenhado em x=%d\n", iconUmidX);
-    
-    // DESENHA CIDADE (sobre o wallpaper)
+
+    // DESENHA CIDADE
     char cidadeStr[] = "Pouso Alegre/MG";
     lcd.setTextColor(ST77XX_WHITE);
     lcd.setTextSize(1);
     int xCidade = calcularPosicaoX(cidadeStr, 1);
-    lcd.setCursor(xCidade, 110);
+    lcd.setCursor(xCidade, 125);
     lcd.print(cidadeStr);
     Serial.printf("🏙️ Cidade desenhada em x=%d\n", xCidade);
-    
+
     Serial.println("✅ Interface completa redesenhada!");
 }
 
@@ -182,7 +186,8 @@ void showErrorMessage(const char* message) {
 }
 
 void showStatusMessage(const char* message, uint16_t color) {
-    // Desenha mensagem de status SEM fundo preto
+    // Limpa área do texto antes de mostrar a mensagem
+    lcd.fillRect(0, 55, 240, 20, ST77XX_BLACK); // Ajuste altura/largura conforme necessário
     lcd.setTextColor(color);
     lcd.setTextSize(1);
     lcd.setCursor(10, 60);
@@ -212,7 +217,4 @@ void animacaoChuvaLimpeza() {
         }
         delay(35);
     }
-
-    // Ao final, cobre tudo com azul para garantir que o fundo foi escondido
-    // lcd.fillRect(0, 0, 240, 135, ST77XX_BLUE);
 }

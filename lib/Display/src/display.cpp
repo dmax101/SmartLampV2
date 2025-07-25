@@ -1,28 +1,86 @@
 #include "display.h"
 #include <config.h>
 #include <time.h>
-#include "wallpaper.h"  // Adicionar include do wallpaper
+#include "wallpaper.h" // Adicionar include do wallpaper
 
 // Inicializa o display
 Adafruit_ST7789 lcd = Adafruit_ST7789(LCD_CS, LCD_DC, LCD_RST);
 
-void initDisplay() {
+// Variáveis para controle do display
+volatile bool displayState = true; // Display inicialmente ligado
+volatile unsigned long lastButtonPress = 0;
+
+void initDisplay()
+{
     Serial.println("Iniciando display...");
-    
+
     // Configura o pino do backlight
     pinMode(LCD_BLK, OUTPUT);
     digitalWrite(LCD_BLK, HIGH);
-    
+
     // Inicializa o display
     lcd.init(135, 240);
     lcd.fillScreen(ST77XX_BLACK);
     Serial.println("Display inicializado");
-    
+
     // Define rotação final
     lcd.setRotation(3);
+
+    // Inicializa o botão de controle
+    initDisplayButton();
 }
 
-int16_t calcularPosicaoX(const char* texto, uint8_t tamanho, int16_t margemDireita) {
+void initDisplayButton()
+{
+    // Configura o pino do botão como entrada com pull-up interno
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+    // Configura a interrupção para detectar borda de descida (botão pressionado)
+    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
+
+    Serial.println("Botão de controle do display inicializado no pino D4");
+}
+
+void IRAM_ATTR buttonISR()
+{
+    // Debounce: ignora pressões muito próximas (menos de 500ms)
+    unsigned long currentTime = millis();
+    if (currentTime - lastButtonPress > 500)
+    {
+        lastButtonPress = currentTime;
+        displayState = !displayState; // Inverte o estado do display
+    }
+}
+
+void toggleDisplay()
+{
+    if (displayState)
+    {
+        // Liga o display
+        digitalWrite(LCD_BLK, HIGH);
+
+        // Reinicializa o display quando ligado
+        lcd.init(135, 240);
+        lcd.setRotation(3);
+        lcd.fillScreen(ST77XX_BLACK);
+
+        Serial.println("Display ligado e reinicializado");
+    }
+    else
+    {
+        // Desliga o display
+        digitalWrite(LCD_BLK, LOW);
+        Serial.println("Display desligado");
+    }
+}
+
+bool isDisplayOn()
+{
+    return displayState;
+}
+
+int16_t calcularPosicaoX(const char *texto, uint8_t tamanho, int16_t margemDireita)
+{
     int16_t x1, y1;
     uint16_t w, h;
     lcd.setTextSize(tamanho);
@@ -30,32 +88,38 @@ int16_t calcularPosicaoX(const char* texto, uint8_t tamanho, int16_t margemDirei
     return 240 - w - margemDireita;
 }
 
-void clearDisplayArea(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t color) {
+void clearDisplayArea(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t color)
+{
     // REMOVIDO: Não limpa mais áreas, preserva o wallpaper
     Serial.printf("🚫 clearDisplayArea chamado mas ignorado para preservar wallpaper\n");
 }
 
-void clearStatusMessages() {
+void clearStatusMessages()
+{
     // REMOVIDO: Não limpa mais a tela toda, preserva o wallpaper
     Serial.println("🚫 clearStatusMessages chamado mas ignorado para preservar wallpaper");
 }
 
-void desenharIconeUmidade(int16_t x, int16_t y) {
+void desenharIconeUmidade(int16_t x, int16_t y)
+{
     // Desenha uma gota d'água
     lcd.fillCircle(x + 5, y + 8, 3, ST77XX_BLUE);
     lcd.fillTriangle(x + 5, y + 2, x + 2, y + 8, x + 8, y + 8, ST77XX_BLUE);
-    
+
     // Adiciona brilho na gota
     lcd.drawPixel(x + 4, y + 6, ST77XX_CYAN);
     lcd.drawPixel(x + 3, y + 7, ST77XX_CYAN);
 }
 
-void desenharIconeClima(int16_t x, int16_t y, String icone) {
+void desenharIconeClima(int16_t x, int16_t y, String icone)
+{
     // Ícones menores e proporcionais à temperatura
-    if (icone == "01d" || icone == "01n") { // Sol
+    if (icone == "01d" || icone == "01n")
+    {                                                     // Sol
         lcd.fillCircle(x + 10, y + 10, 5, ST77XX_YELLOW); // Raio menor
         // Raios do sol
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 8; i++)
+        {
             float angle = i * PI / 4;
             int x1 = x + 10 + cos(angle) * 8;
             int y1 = y + 10 + sin(angle) * 8;
@@ -63,14 +127,16 @@ void desenharIconeClima(int16_t x, int16_t y, String icone) {
             int y2 = y + 10 + sin(angle) * 11;
             lcd.drawLine(x1, y1, x2, y2, ST77XX_YELLOW);
         }
-    } 
-    else if (icone == "02d" || icone == "02n" || icone == "03d" || icone == "03n") { // Nuvens
+    }
+    else if (icone == "02d" || icone == "02n" || icone == "03d" || icone == "03n")
+    { // Nuvens
         lcd.fillCircle(x + 5, y + 13, 4, ST77XX_WHITE);
         lcd.fillCircle(x + 10, y + 10, 5, ST77XX_WHITE);
         lcd.fillCircle(x + 15, y + 13, 4, ST77XX_WHITE);
         lcd.fillRect(x + 5, y + 13, 10, 6, ST77XX_WHITE);
     }
-    else { // Padrão - nuvem
+    else
+    { // Padrão - nuvem
         lcd.fillCircle(x + 5, y + 13, 4, ST77XX_WHITE);
         lcd.fillCircle(x + 10, y + 10, 5, ST77XX_WHITE);
         lcd.fillCircle(x + 15, y + 13, 4, ST77XX_WHITE);
@@ -78,24 +144,36 @@ void desenharIconeClima(int16_t x, int16_t y, String icone) {
     }
 }
 
-void drawInterfaceElements(const WeatherData& weather) {
+void drawInterfaceElements(const WeatherData &weather)
+{
+    // Verifica se o display está ligado antes de desenhar
+    if (!displayState)
+    {
+        return; // Se o display está desligado, não desenha nada
+    }
+
     Serial.println("🎨 === REDESENHANDO INTERFACE COMPLETA ===");
 
     // Variáveis para cálculo de texto
     int16_t x1, y1;
     uint16_t w, h;
 
+    // Garante que o display está ativo antes de desenhar
+    digitalWrite(LCD_BLK, HIGH);
+
     animacaoChuvaLimpeza();
 
     // Redesenha o wallpaper
     Serial.println("🖼️ Redesenhando wallpaper...");
-    if (!WallpaperManager::loadWallpaperFromFile()) {
+    if (!WallpaperManager::loadWallpaperFromFile())
+    {
         Serial.println("❌ Falha ao carregar wallpaper - usando fundo preto");
         lcd.fillScreen(ST77XX_BLACK);
     }
 
     struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
+    if (!getLocalTime(&timeinfo))
+    {
         Serial.println("❌ Falha ao obter o tempo");
         return;
     }
@@ -149,7 +227,7 @@ void drawInterfaceElements(const WeatherData& weather) {
     lcd.setTextSize(2);
     lcd.getTextBounds(umidadeStr, 0, 0, &x1, &y1, &w, &h);
     int xUmid = 240 - w - 10;
-    int yUmid = 105;          // Mantém posição da umidade
+    int yUmid = 105; // Mantém posição da umidade
     lcd.setTextColor(ST77XX_BLUE);
     lcd.setCursor(xUmid, yUmid);
     lcd.print(umidadeStr);
@@ -172,12 +250,23 @@ void drawInterfaceElements(const WeatherData& weather) {
     Serial.println("✅ Interface completa redesenhada!");
 }
 
-void clearArea(int16_t x, int16_t y, uint16_t w, uint16_t h) {
+void clearArea(int16_t x, int16_t y, uint16_t w, uint16_t h)
+{
     // REMOVIDO: Não limpa mais áreas, preserva o wallpaper
     Serial.printf("🚫 clearArea chamado mas ignorado para preservar wallpaper\n");
 }
 
-void showErrorMessage(const char* message) {
+void showErrorMessage(const char *message)
+{
+    // Só mostra erro se o display estiver ligado
+    if (!displayState)
+    {
+        return;
+    }
+
+    // Garante que o backlight está ativo
+    digitalWrite(LCD_BLK, HIGH);
+
     // Desenha mensagem de erro SEM fundo preto
     lcd.setTextColor(ST77XX_RED);
     lcd.setTextSize(1);
@@ -185,7 +274,17 @@ void showErrorMessage(const char* message) {
     lcd.println(message);
 }
 
-void showStatusMessage(const char* message, uint16_t color) {
+void showStatusMessage(const char *message, uint16_t color)
+{
+    // Só mostra mensagem se o display estiver ligado
+    if (!displayState)
+    {
+        return;
+    }
+
+    // Garante que o backlight está ativo
+    digitalWrite(LCD_BLK, HIGH);
+
     // Limpa área do texto antes de mostrar a mensagem
     lcd.fillRect(0, 55, 240, 20, ST77XX_BLACK); // Ajuste altura/largura conforme necessário
     lcd.setTextColor(color);
@@ -194,24 +293,29 @@ void showStatusMessage(const char* message, uint16_t color) {
     lcd.println(message);
 }
 
-void animacaoChuvaLimpeza() {
+void animacaoChuvaLimpeza()
+{
     const int numPingos = 30; // Quantidade de ondas
     int pingoX[numPingos];
     int pingoY[numPingos];
 
     // Inicializa posições X e Y aleatórias para os pingos
-    for (int i = 0; i < numPingos; i++) {
+    for (int i = 0; i < numPingos; i++)
+    {
         pingoX[i] = random(10, 230);
         pingoY[i] = random(10, 125);
     }
 
     // Animação: ondas circulares crescendo pela tela
-    for (int frame = 0; frame < 20; frame++) {
+    for (int frame = 0; frame < 20; frame++)
+    {
         // Não limpa o fundo, desenha sobre o conteúdo anterior
-        for (int i = 0; i < numPingos; i++) {
+        for (int i = 0; i < numPingos; i++)
+        {
             int raio = 2 + frame * 7;
             lcd.drawCircle(pingoX[i], pingoY[i], raio, ST77XX_BLACK);
-            if (frame > 4) {
+            if (frame > 4)
+            {
                 lcd.drawCircle(pingoX[i], pingoY[i], raio - 4, ST77XX_BLACK);
             }
         }

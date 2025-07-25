@@ -78,6 +78,34 @@ void setup()
 
 void loop()
 {
+    // Verifica se houve mudança no estado do display pelo botão
+    static bool lastDisplayState = true;
+    if (displayState != lastDisplayState)
+    {
+        toggleDisplay();
+        lastDisplayState = displayState;
+
+        // Se o display foi ligado, força atualização completa e recarrega wallpaper
+        if (displayState)
+        {
+            Serial.println("Display ligado - forçando atualização completa");
+            forceFullUpdate = true;
+
+            // Pequeno delay para estabilizar o display
+            delay(100);
+
+            // Força recarregamento do wallpaper
+            WallpaperManager::displayWallpaperWithOverlay();
+        }
+    }
+
+    // Se o display está desligado, não precisa fazer mais nada
+    if (!displayState)
+    {
+        delay(100);
+        return;
+    }
+
     // Verifica conexão WiFi
     if (!WiFiManager::isConnected())
     {
@@ -123,25 +151,26 @@ void loop()
     // Redesenha interface
     if (forceFullUpdate || minuteChanged)
     {
-        // Verifica se wallpaper precisa ser recarregado
-        if (!WallpaperManager::isWallpaperLoaded())
+        // Só atualiza se o display estiver ligado
+        if (isDisplayOn())
         {
-            Serial.println("Wallpaper não carregado, recarregando...");
-            WallpaperManager::displayWallpaperWithOverlay();
-        }
+            // Verifica se wallpaper precisa ser recarregado
+            if (!WallpaperManager::isWallpaperLoaded() || forceFullUpdate)
+            {
+                Serial.println("Wallpaper não carregado ou atualização forçada, recarregando...");
+                WallpaperManager::displayWallpaperWithOverlay();
+            }
 
-        WeatherData currentWeather = weatherManager.getCurrentWeather();
-        currentWeather.temperatura = Sensors::getTemperature();
-        currentWeather.umidade = Sensors::getHumidity();
+            WeatherData currentWeather = weatherManager.getCurrentWeather();
+            currentWeather.temperatura = Sensors::getTemperature();
+            currentWeather.umidade = Sensors::getHumidity();
 
-        if (forceFullUpdate || minuteChanged)
-        {
             drawInterfaceElements(currentWeather);
+
+            Serial.printf("Display atualizado - Temp: %.1f°C | Umidade: %.0f%%\n",
+                          currentWeather.temperatura, currentWeather.umidade);
         }
 
         forceFullUpdate = false;
-
-        Serial.printf("Display atualizado - Temp: %.1f°C | Umidade: %.0f%%\n",
-                      currentWeather.temperatura, currentWeather.umidade);
     }
 }

@@ -3,6 +3,18 @@
 // Variável estática para controlar o estado da lâmpada
 bool LampControl::lampState = false;
 
+// Variáveis para controle não-bloqueante da mensagem contínua
+bool LampControl::continuousMode = false;
+unsigned long LampControl::lastMorseTime = 0;
+int LampControl::currentMessageIndex = 0;
+int LampControl::currentLetterIndex = 0;
+int LampControl::currentSymbolIndex = 0;
+bool LampControl::inPause = false;
+unsigned long LampControl::pauseStartTime = 0;
+int LampControl::pauseType = 0;
+const char *LampControl::continuousMessage = "SOFIA E LINDA";
+bool LampControl::lampOnForMorse = false;
+
 // Tabela de código Morse para letras A-Z
 const char *morseTable[26] = {
     ".-",   // A
@@ -45,10 +57,9 @@ void LampControl::begin()
 
     Serial.println("Controle das lâmpadas inicializado no pino D13");
 
-    // Executa a mensagem especial na inicialização
-    Serial.println("Transmitindo mensagem especial em código Morse...");
-    delay(1000); // Aguarda 1 segundo antes de começar
-    transmitSofiaMessage();
+    // Inicia a mensagem contínua em background
+    Serial.println("Iniciando transmissão contínua da mensagem especial...");
+    startContinuousMessage();
 }
 
 void LampControl::turnOn()
@@ -193,4 +204,181 @@ void LampControl::transmitSofiaMessage()
     blink(5, 200, 200);
 
     Serial.println("💝 === MENSAGEM ESPECIAL TRANSMITIDA ===");
+}
+
+void LampControl::startContinuousMessage()
+{
+    continuousMode = true;
+    currentMessageIndex = 0;
+    currentLetterIndex = 0;
+    currentSymbolIndex = 0;
+    inPause = false;
+    lastMorseTime = millis();
+    lampOnForMorse = false;
+
+    Serial.println("💝 Modo contínuo ATIVADO - Sofia é Linda em loop");
+}
+
+void LampControl::stopContinuousMessage()
+{
+    continuousMode = false;
+    if (lampOnForMorse)
+    {
+        digitalWrite(LAMP_PIN, LOW);
+        lampOnForMorse = false;
+    }
+
+    Serial.println("💝 Modo contínuo DESATIVADO");
+}
+
+bool LampControl::isContinuousModeActive()
+{
+    return continuousMode;
+}
+
+void LampControl::updateContinuousMessage()
+{
+    if (!continuousMode)
+        return;
+
+    unsigned long currentTime = millis();
+
+    // Se estamos em pausa
+    if (inPause)
+    {
+        unsigned long pauseDuration = 0;
+
+        switch (pauseType)
+        {
+        case 0:
+            pauseDuration = SYMBOL_PAUSE;
+            break; // Entre símbolos
+        case 1:
+            pauseDuration = LETTER_PAUSE;
+            break; // Entre letras
+        case 2:
+            pauseDuration = WORD_PAUSE;
+            break; // Entre palavras
+        case 3:
+            pauseDuration = 1000;
+            break; // Fim da mensagem (1 segundo) - era 3 segundos
+        }
+
+        if (currentTime - pauseStartTime >= pauseDuration)
+        {
+            inPause = false;
+
+            // Se foi pausa de fim de mensagem, reinicia
+            if (pauseType == 3)
+            {
+                currentMessageIndex = 0;
+                currentLetterIndex = 0;
+                currentSymbolIndex = 0;
+                Serial.println("💝 Reiniciando mensagem contínua...");
+            }
+        }
+        return;
+    }
+
+    // Se a lâmpada está acesa para Morse, verifica se deve apagar
+    if (lampOnForMorse)
+    {
+        unsigned long duration = (currentTime - lastMorseTime);
+        unsigned long expectedDuration = 0;
+
+        // Determina duração esperada baseada no símbolo atual
+        char currentChar = continuousMessage[currentMessageIndex];
+        if (currentChar == ' ')
+        {
+            // Espaço - já tratado na lógica abaixo
+            return;
+        }
+        else if (currentChar >= 'A' && currentChar <= 'Z')
+        {
+            const char *morse = morseTable[currentChar - 'A'];
+            char symbol = morse[currentSymbolIndex];
+            expectedDuration = (symbol == '.') ? DOT_DURATION : DASH_DURATION;
+        }
+
+        if (duration >= expectedDuration)
+        {
+            // Apaga a lâmpada
+            digitalWrite(LAMP_PIN, LOW);
+            lampOnForMorse = false;
+
+            // Avança para próximo símbolo
+            currentSymbolIndex++;
+
+            // Inicia pausa entre símbolos
+            inPause = true;
+            pauseStartTime = currentTime;
+            pauseType = 0; // Pausa entre símbolos
+        }
+        return;
+    }
+
+    // Processa próximo símbolo
+    char currentChar = continuousMessage[currentMessageIndex];
+
+    // Se chegou ao fim da mensagem
+    if (currentChar == '\0')
+    {
+        inPause = true;
+        pauseStartTime = currentTime;
+        pauseType = 3; // Pausa de fim de mensagem
+        return;
+    }
+
+    // Se é espaço (separador de palavras)
+    if (currentChar == ' ')
+    {
+        currentMessageIndex++;
+        currentLetterIndex = 0;
+        currentSymbolIndex = 0;
+
+        inPause = true;
+        pauseStartTime = currentTime;
+        pauseType = 2; // Pausa entre palavras
+        return;
+    }
+
+    // Se é uma letra válida
+    if (currentChar >= 'A' && currentChar <= 'Z')
+    {
+        const char *morse = morseTable[currentChar - 'A'];
+
+        // Se chegou ao fim da letra atual
+        if (morse[currentSymbolIndex] == '\0')
+        {
+            currentMessageIndex++;
+            currentLetterIndex++;
+            currentSymbolIndex = 0;
+
+            inPause = true;
+            pauseStartTime = currentTime;
+            pauseType = 1; // Pausa entre letras
+            return;
+        }
+
+        // Transmite o símbolo atual
+        char symbol = morse[currentSymbolIndex];
+        if (symbol == '.' || symbol == '-')
+        {
+            digitalWrite(LAMP_PIN, HIGH);
+            lampOnForMorse = true;
+            lastMorseTime = currentTime;
+
+            // Debug: mostra o que está sendo transmitido
+            if (currentSymbolIndex == 0)
+            {
+                Serial.printf("[%c: %s] ", currentChar, morse);
+            }
+            Serial.print(symbol);
+        }
+    }
+    else
+    {
+        // Caractere inválido, pula
+        currentMessageIndex++;
+    }
 }

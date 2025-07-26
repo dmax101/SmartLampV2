@@ -104,12 +104,17 @@ void loop()
         }
     }
 
-    // Se o display está desligado, não precisa fazer mais nada
+    // Se o display está desligado, ainda precisa atualizar a mensagem contínua
     if (!displayState)
     {
-        delay(100);
+        // Atualiza mensagem contínua das lâmpadas mesmo com display desligado
+        LampControl::updateContinuousMessage();
+        delay(10);
         return;
     }
+
+    // Atualiza mensagem contínua das lâmpadas
+    LampControl::updateContinuousMessage();
 
     // Verifica conexão WiFi
     if (!WiFiManager::isConnected())
@@ -131,6 +136,8 @@ void loop()
     // Controla frequência de atualização
     if (millis() - lastDisplayUpdate < displayUpdateInterval)
     {
+        // Mesmo durante o delay, atualiza a mensagem contínua
+        LampControl::updateContinuousMessage();
         delay(10);
         return;
     }

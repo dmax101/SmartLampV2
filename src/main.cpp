@@ -6,6 +6,7 @@
 #include "wallpaper.h"
 #include "utils.h"
 #include "sensors.h"
+#include "lampControl.h" // Adiciona controle das lâmpadas
 
 // Variáveis de controle
 WeatherManager weatherManager;
@@ -19,6 +20,10 @@ void setup()
     delay(2000);
 
     Serial.println("=== SMART LAMP INICIANDO ===");
+
+    // Inicializa controle das lâmpadas PRIMEIRO (executa mensagem especial)
+    Serial.println("Inicializando controle das lâmpadas...");
+    LampControl::begin();
 
     // Inicializa SPIFFS primeiro
     Serial.println("Inicializando SPIFFS...");

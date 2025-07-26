@@ -1,7 +1,8 @@
 #include "display.h"
 #include <config.h>
 #include <time.h>
-#include "wallpaper.h" // Adicionar include do wallpaper
+#include "wallpaper.h"   // Adicionar include do wallpaper
+#include "lampControl.h" // Adicionar controle das lâmpadas
 
 // Inicializa o display
 Adafruit_ST7789 lcd = Adafruit_ST7789(LCD_CS, LCD_DC, LCD_RST);
@@ -64,12 +65,19 @@ void toggleDisplay()
         lcd.setRotation(3);
         lcd.fillScreen(ST77XX_BLACK);
 
+        // Sincroniza as lâmpadas com o display
+        LampControl::syncWithDisplay(true);
+
         Serial.println("Display ligado e reinicializado");
     }
     else
     {
         // Desliga o display
         digitalWrite(LCD_BLK, LOW);
+
+        // Sincroniza as lâmpadas com o display
+        LampControl::syncWithDisplay(false);
+
         Serial.println("Display desligado");
     }
 }

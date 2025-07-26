@@ -52,14 +52,11 @@ void LampControl::begin()
     // Configura o pino como saída
     pinMode(LAMP_PIN, OUTPUT);
 
-    // Inicializa com lâmpada desligada
-    turnOff();
+    // Inicializa com lâmpada ligada (sincronizada com o display)
+    turnOn();
 
     Serial.println("Controle das lâmpadas inicializado no pino D13");
-
-    // Inicia a mensagem contínua em background
-    Serial.println("Iniciando transmissão contínua da mensagem especial...");
-    startContinuousMessage();
+    Serial.println("Lâmpadas sincronizadas com o estado do display");
 }
 
 void LampControl::turnOn()
@@ -380,5 +377,19 @@ void LampControl::updateContinuousMessage()
     {
         // Caractere inválido, pula
         currentMessageIndex++;
+    }
+}
+
+void LampControl::syncWithDisplay(bool displayOn)
+{
+    if (displayOn)
+    {
+        turnOn();
+        Serial.println("💡 Lâmpadas ligadas - sincronizadas com display");
+    }
+    else
+    {
+        turnOff();
+        Serial.println("💡 Lâmpadas desligadas - sincronizadas com display");
     }
 }

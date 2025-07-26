@@ -60,6 +60,9 @@ public:
     static void stopContinuousMessage();
     static void updateContinuousMessage(); // Deve ser chamada no loop principal
     static bool isContinuousModeActive();
+
+    // Sincronização com display
+    static void syncWithDisplay(bool displayOn);
 };
 
 #endif
